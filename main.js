@@ -5,7 +5,7 @@ import { FBXLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/j
 import { STLLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/STLLoader.js'
 import { TDSLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/TDSLoader.js'
 
-/* ---------------- Shader loading (browser-safe) ---------------- */
+/* ----------------- Shader loading (browser-safe) ----------------- */
 
 async function loadShaders() {
   const [vert, frag] = await Promise.all([
