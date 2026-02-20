@@ -3,32 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <title>NASA 3D Hologram Viewer</title>
-
-  <!-- Primary Meta -->
-  <meta name="description" content="Interactive holographic viewer for NASA 3D models using Three.js and custom shaders." />
-  <meta name="author" content="ArtechFuz3D" />
-  <meta name="robots" content="index, follow" />
-
-  <!-- Open Graph -->
-  <meta property="og:title" content="NASA 3D Hologram Viewer" />
-  <meta property="og:description" content="Browse and view NASA’s open 3D models with a real-time hologram shader." />
-  <meta property="og:type" content="website" />
-
-  <!-- Twitter -->
-  <meta name="twitter:card" content="summary_large_image" />
-
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <link rel="stylesheet" href="style.css" />
+  <meta name="description" content="Interactive holographic viewer for NASA 3D models." />
+  <link rel="stylesheet" href="./src/style.css" />
 </head>
-
 <body>
-  <select id="modelSelect">
-    <option>Loading NASA models…</option>
-  </select>
+  <div id="ui">
+    <h1>NASA 3D Hologram Viewer</h1>
+    <select id="modelSelect">
+      <option value="">Fetching NASA models…</option>
+    </select>
+    <div id="status"></div>
+  </div>
 
   <canvas class="webgl"></canvas>
 
-  <script type="module" src="main.js"></script>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>
