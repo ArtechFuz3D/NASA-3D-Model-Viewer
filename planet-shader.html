@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas=document.getElementById('c');
+const gl=canvas.getContext('webgl2');
+if(!gl){document.body.innerHTML='<p style="color:#f44;padding:30px">WebGL2 not supported</p>';throw 0;}
+
+const flags={surface:true,disp:true,lights:true,clouds:true,atmo:true,rings:false,moon:false,stars:true};
+let planet=0;
+// Planet rotation (left drag)
+let rotX=0,rotY=0;
+// Sun direction (right drag)
+let sunTheta=0.6,sunPhi=0.55;
+let zoom=1.0;
+let ldown=false,rdown=false,lx=0,ly=0,rx=0,ry=0;
+let t=0;
+let panX=0, panY=0;
+
+
+// Controlled by parent via postMessage
+let paused = false;
+window.addEventListener('message', function(e) {
+  const d = e.data;
+  if (!d || d.type !== 'planetConfig') return;
+  if (d.planet !== undefined) planet = d.planet;
+  if (d.flag !== undefined && d.value !== undefined) flags[d.flag] = d.value;
+  if (d.paused !== undefined) paused = d.paused;
+  // Orbit deltas forwarded from parent when panel is open
+  if (d.dRotX    !== undefined) rotX += d.dRotX;
+  if (d.dRotY    !== undefined) rotY += d.dRotY;
+  if (d.dSunX    !== undefined) sunTheta -= d.dSunX;
+  if (d.dSunY    !== undefined) sunPhi = Math.max(.05, Math.min(Math.PI-.05, sunPhi + d.dSunY));
+  if (d.dZoom    !== undefined) zoom = Math.max(.4, Math.min(3., zoom + d.dZoom));
+  if (d.dPanX    !== undefined) panX += d.dPanX;
+  if (d.dPanY    !== undefined) panY += d.dPanY;
+});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('mousedown',e=>{
+  if(e.button===0){ldown=true;lx=e.clientX;ly=e.clientY;}
+  if(e.button===2){rdown=true;rx=e.clientX;ry=e.clientY;}
+});
+window.addEventListener('mouseup',e=>{
+  if(e.button===0)ldown=false;
+  if(e.button===2)rdown=false;
+});
+window.addEventListener('mousemove',e=>{
+  if(ldown){rotY+=(e.clientX-lx)*.004;rotX+=(e.clientY-ly)*.004;lx=e.clientX;ly=e.clientY;}
+  if(rdown){sunTheta-=(e.clientX-rx)*.005;sunPhi=Math.max(.05,Math.min(Math.PI-.05,sunPhi+(e.clientY-ry)*.005));rx=e.clientX;ry=e.clientY;}
+});
+canvas.addEventListener('wheel',e=>{zoom=Math.max(.4,Math.min(3.,zoom+e.deltaY*.001));},{passive:true});
+
+// Touch
+let touches={};
+canvas.addEventListener('touchstart',e=>{
+  [...e.changedTouches].forEach(t=>{touches[t.identifier]={x:t.clientX,y:t.clientY};});
+},{passive:true});
+canvas.addEventListener('touchend',e=>{
+  [...e.changedTouches].forEach(t=>delete touches[t.identifier]);
+},{passive:true});
+canvas.addEventListener('touchmove',e=>{
+  [...e.changedTouches].forEach(tt=>{
+    const prev=touches[tt.identifier];
+    if(prev){rotY+=(tt.clientX-prev.x)*.004;rotX+=(tt.clientY-prev.y)*.004;}
+    touches[tt.identifier]={x:tt.clientX,y:tt.clientY};
+  });
+},{passive:true});
+
+//──────────────────────────────────────────────────────────
+const VS=`#version 300 es
+in vec2 a;out vec2 vU;
+void main(){vU=a;gl_Position=vec4(a,0.,1.);}`;
+
+const FS=`#version 300 es
+precision highp float;
+in vec2 vU;out vec4 fC;
+
+uniform float uT;
+uniform vec3 uSun;
+uniform mat3 uRot;   // planet rotation matrix
+uniform float uZoom;
+uniform vec2  uRes;
+uniform vec2  uPan;
+uniform int  uPlanet;
+uniform bool uSurface,uDisp,uLights,uClouds,uAtmo,uRings,uMoon,uStars;
+
+const float PI=3.14159265;
+
+//── Noise ─────────────────────────────────────────────────
+float h1(float n){return fract(sin(n)*43758.5453);}
+float h3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
+float n3(vec3 p){
+  vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+  float b=i.x+i.y*57.+i.z*113.;
+  return mix(mix(mix(h1(b),h1(b+1.),f.x),mix(h1(b+57.),h1(b+58.),f.x),f.y),
+             mix(mix(h1(b+113.),h1(b+114.),f.x),mix(h1(b+170.),h1(b+171.),f.x),f.y),f.z);
+}
+float fbm(vec3 p,int o){
+  float v=0.,a=.5,s=0.;
+  for(int i=0;i<o;i++){v+=a*n3(p);s+=a;p=p*2.+vec3(5.2,1.3,2.8);a*=.5;}
+  return v/s;
+}
+
+//── Sphere intersection ────────────────────────────────────
+bool hitS(vec3 ro,vec3 rd,float r,out float t0,out float t1){
+  float b=dot(ro,rd),c=dot(ro,ro)-r*r,d=b*b-c;
+  if(d<0.)return false;d=sqrt(d);t0=-b-d;t1=-b+d;return true;
+}
+
+//── Planet surface helpers ─────────────────────────────────
+float seaLvl(){
+  if(uPlanet==1||uPlanet==3)return .32;
+  if(uPlanet==2)return .28;
+  if(uPlanet==4)return .42;
+  return .48;
+}
+float iceStart(){
+  if(uPlanet==2)return .28;
+  if(uPlanet==3)return 9.;
+  if(uPlanet==1)return .92;
+  if(uPlanet==4)return .86;
+  return .70;
+}
+float terrScale(){
+  if(uPlanet==1)return 2.2;
+  if(uPlanet==2)return 2.8;
+  if(uPlanet==3)return 3.5;
+  if(uPlanet==4)return 3.0;
+  return 2.5;
+}
+float heightAt(vec3 sn){// sn = surface normal in PLANET LOCAL space
+  float s=terrScale();
+  float h=fbm(sn*s,8);
+  if(uPlanet==3){float r=1.-abs(2.*fbm(sn*s,5)-.85);h=mix(h,r*.55+.22,.55);}
+  if(uPlanet==4){vec3 w=vec3(fbm(sn*2.+vec3(1.7),4),fbm(sn*2.+vec3(9.2),4),0.);h=fbm(sn*s+w*.7,6);}
+  return h;
+}
+
+vec3 waterCol(float d){
+  if(uPlanet==1)return vec3(.32,.14,.08);
+  if(uPlanet==2)return vec3(.52,.76,.94);
+  if(uPlanet==3)return vec3(.04,.02,.02);
+  if(uPlanet==4)return vec3(.06,.22,.32);
+  return mix(vec3(.03,.09,.30),vec3(.07,.26,.54),d);
+}
+vec3 landCol(float h){
+  if(uPlanet==1){return mix(mix(vec3(.62,.28,.10),vec3(.48,.20,.09),smoothstep(.3,.7,h)),vec3(.36,.15,.09),smoothstep(.7,.9,h));}
+  if(uPlanet==2){return mix(mix(vec3(.74,.87,.96),vec3(.42,.46,.50),smoothstep(.35,.6,h)),vec3(.93,.96,1.),smoothstep(.7,.9,h));}
+  if(uPlanet==3){
+    float crack=smoothstep(.52,.58,fbm(vec3(h*6.),4));
+    return mix(mix(vec3(.07,.04,.03),vec3(.16,.09,.05),smoothstep(.2,.6,h)),vec3(.92,.22,.01),crack*.85);
+  }
+  if(uPlanet==4){return mix(mix(vec3(.10,.36,.26),vec3(.26,.13,.40),smoothstep(.3,.6,h)),vec3(.52,.36,.63),smoothstep(.65,.9,h));}
+  vec3 c=mix(vec3(.74,.66,.44),vec3(.13,.40,.10),smoothstep(.02,.15,h));
+  c=mix(c,vec3(.07,.26,.08),smoothstep(.15,.38,h));
+  c=mix(c,vec3(.44,.39,.34),smoothstep(.50,.75,h));
+  return mix(c,vec3(.89,.92,.96),smoothstep(.78,.92,h));
+}
+vec3 iceCol(){
+  if(uPlanet==4)return vec3(.62,.83,.52);
+  if(uPlanet==2)return vec3(.86,.94,1.);
+  return vec3(.87,.92,.97);
+}
+vec3 atmoCol(){
+  if(uPlanet==1)return vec3(.58,.24,.07);
+  if(uPlanet==2)return vec3(.48,.72,.98);
+  if(uPlanet==3)return vec3(.78,.13,.01);
+  if(uPlanet==4)return vec3(.22,.78,.52);
+  return vec3(.22,.52,.98);
+}
+vec3 cloudCol(){
+  if(uPlanet==1)return vec3(.76,.52,.32);
+  if(uPlanet==3)return vec3(.38,.18,.08);
+  if(uPlanet==4)return vec3(.38,.82,.62);
+  return vec3(.90,.92,.96);
+}
+float cloudThresh(){
+  if(uPlanet==1||uPlanet==3)return .60;
+  return .52;
+}
+
+//── Displaced sphere hit ───────────────────────────────────
+bool hitDisplaced(vec3 ro,vec3 rd,out float tHit,out vec3 nHit){
+  float t0,t1;
+  if(!hitS(ro,rd,1.09,t0,t1)||t1<0.)return false;
+  float sl=seaLvl();
+  float tS=max(t0,.0);
+  // Adaptive step count – fewer steps when not displaced
+  int STEPS=uDisp?28:2;
+  float span=min(t1,tS+.28)-tS;
+  float dt=span/float(STEPS);
+  float prev=1.;
+  for(int i=0;i<=STEPS;i++){
+    float tc=tS+float(i)*dt;
+    vec3 p=ro+rd*tc;
+    float r=length(p);
+    vec3 sn=uRot*(p/r); // local normal
+    float h=heightAt(sn);
+    float disp=uDisp?mix(0.,.065,max(h-sl,0.)/(1.-sl)):0.;
+    float inside=r-(1.+disp);
+    if(i>0&&inside<0.&&prev>=0.){
+      // Binary refine
+      float ta=tc-dt,tb=tc;
+      for(int j=0;j<5;j++){
+        float tm=(ta+tb)*.5;
+        vec3 pm=ro+rd*tm;float rm=length(pm);
+        vec3 snm=uRot*(pm/rm);
+        float hm=heightAt(snm);
+        float dm=uDisp?mix(0.,.065,max(hm-sl,0.)/(1.-sl)):0.;
+        if(rm-(1.+dm)<0.)tb=tm; else ta=tm;
+      }
+      tHit=(ta+tb)*.5;
+      vec3 fp=ro+rd*tHit;
+      vec3 gn=normalize(fp);
+      nHit=gn;
+      if(uDisp){
+        // Finite-diff normal in world space
+        float eps=.009;
+        vec3 ax=normalize(vec3(1,0,0)-gn*gn.x);
+        vec3 ay=normalize(cross(gn,ax));
+        vec3 px=fp+ax*eps,py=fp+ay*eps;
+        float hx=heightAt(uRot*normalize(px));
+        float hy=heightAt(uRot*normalize(py));
+        float h0=heightAt(uRot*gn);
+        float dx=uDisp?mix(0.,.065,max(hx-sl,0.)/(1.-sl)):0.;
+        float dy2=uDisp?mix(0.,.065,max(hy-sl,0.)/(1.-sl)):0.;
+        float d0=uDisp?mix(0.,.065,max(h0-sl,0.)/(1.-sl)):0.;
+        // Tangent-space displacement gradient
+        vec3 tx=normalize((px*(1.+dx))-(fp*(1.+d0)));
+        vec3 ty2=normalize((py*(1.+dy2))-(fp*(1.+d0)));
+        nHit=normalize(cross(tx,ty2));
+        if(dot(nHit,gn)<0.)nHit=-nHit;
+      }
+      return true;
+    }
+    prev=inside;
+  }
+  // Fallback plain sphere
+  if(hitS(ro,rd,1.,t0,t1)&&t0>0.){
+    tHit=t0;nHit=normalize(ro+rd*t0);return true;
+  }
+  return false;
+}
+
+//── Volumetric cloud march ─────────────────────────────────
+vec4 marchClouds(vec3 ro,vec3 rd,float maxT){
+  float cIn=1.035,cOut=1.085;
+  float t0,t1;
+  if(!hitS(ro,rd,cOut,t0,t1))return vec4(0.);
+  float tS=max(t0,.0);
+  float tE=min(t1,maxT);
+  if(tS>=tE)return vec4(0.);
+  const int CS=20;
+  float dt=(tE-tS)/float(CS);
+  vec3 totalL=vec3(0.);float totalA=0.;
+  float cs=terrScale()*.88;
+  float thresh=cloudThresh();
+  float cSpd=uPlanet==3?.04:.065;
+  for(int i=0;i<CS;i++){
+    if(totalA>.96)break;
+    float tc=tS+(float(i)+.5)*dt;
+    vec3 p=ro+rd*tc;
+    float r=length(p);
+    if(r<cIn||r>cOut)continue;
+    vec3 sn=uRot*(p/r);// local
+    float d=fbm(sn*cs+vec3(0.,uT*cSpd*.01,uT*cSpd*.007),5);
+    d=smoothstep(thresh,thresh+.16,d);
+    if(d<.01)continue;
+    // Sun shadow (3 cheap taps)
+    float shad=1.;
+    for(int s=0;s<3;s++){
+      vec3 sp=p+uSun*(float(s)+1.)*.018;
+      float sr=length(sp);
+      if(sr<cIn||sr>cOut)break;
+      vec3 ssn=uRot*(sp/sr);
+      float sd=fbm(ssn*cs+vec3(0.,uT*cSpd*.01,uT*cSpd*.007),4);
+      shad*=1.-smoothstep(thresh,thresh+.16,sd)*.38;
+    }
+    float sunD=max(dot(normalize(p),uSun),.0);
+    vec3 cc=cloudCol()*(sunD*.85+.15)*shad;
+    float a=d*(1.-totalA)*dt*9.;
+    totalA+=a;totalL+=cc*a;
+  }
+  totalA=clamp(totalA,0.,1.);
+  if(totalA<.001)return vec4(0.);
+  return vec4(totalL/totalA,totalA);
+}
+
+//── Rings ─────────────────────────────────────────────────
+const float RING_IN=1.38,RING_OUT=2.45;
+
+vec4 ringColor(vec3 ro,vec3 rd,bool frontPass){
+  // Ring plane normal in local space, rotated to world
+  mat3 invRot=transpose(uRot);
+  vec3 RING_N=normalize(invRot*vec3(.22,1.,.08));
+  float denom=dot(rd,RING_N);
+  if(abs(denom)<.0001)return vec4(0.);
+  float tr=-dot(ro,RING_N)/denom;
+  if(tr<.0)return vec4(0.);
+  // Front pass: ring is between camera and planet (tr < planet hit)
+  // Back pass: ring is behind planet
+  // We separate by sign(dot(rd, from ring toward camera))
+  // Simple: front pass = dot(RING_N, rd) has same sign as z of RING_N
+  // Actually controlled by tr vs planet tHit — just draw both
+  vec3 hp=ro+rd*tr;
+  float dist=length(hp);
+  if(dist<RING_IN||dist>RING_OUT)return vec4(0.);
+  float n=(dist-RING_IN)/(RING_OUT-RING_IN);
+
+  // Multi-band rings using noise + sine bands
+  float bandN=fbm(vec3(dist*5.5,0.,0.),4);
+  float sine=sin(n*PI*14.)*.5+.5;
+  float density=mix(bandN,sine,.4)*smoothstep(0.,.05,n)*smoothstep(0.,.05,1.-n);
+  float alpha=clamp(density*.9,0.,1.);
+  if(alpha<.01)return vec4(0.);
+
+  // Color: icy inner, dusty mid, faint outer
+  vec3 inner=vec3(.88,.84,.78);
+  vec3 mid=vec3(.70,.62,.50);
+  vec3 outer=vec3(.50,.46,.40);
+  vec3 rc=mix(mix(inner,mid,smoothstep(.0,.45,n)),outer,smoothstep(.45,1.,n));
+
+  // Cassini division
+  float cassini=smoothstep(.455,.47,n)*smoothstep(.53,.515,n);
+  alpha*=(1.-cassini*.9);
+
+  // Lit side vs dark (dot of ring normal with sun)
+  float lit=abs(dot(RING_N,uSun))*.6+.4;
+  // Shadow: if ring point is in planet shadow
+  vec3 hpS=hp-uSun*dot(hp,uSun);
+  float inShadow=step(length(hpS),1.02)*step(0.,-dot(hp,uSun));
+  float shadow=1.-inShadow*.8;
+  rc*=lit*shadow;
+
+  // Transparency: rings are semi-transparent
+  alpha=mix(alpha*.6,alpha*.95,n*.5);
+  return vec4(rc,alpha);
+}
+
+//── Stars ─────────────────────────────────────────────────
+float stars(vec3 rd){
+  vec3 p=floor(rd*200.);float hv=h3(p);
+  return hv>.9975?smoothstep(.9975,1.,hv)*5.:0.;
+}
+
+void main(){
+  float aspect=uRes.x/uRes.y;
+  vec2 uv=vec2(vU.x*aspect,vU.y);
+  vec3 ro=vec3(uPan.x, uPan.y, 2.5/uZoom);
+  vec3 rd=normalize(vec3(uv.x,uv.y,-1.65));
+  vec3 col=vec3(0.);
+
+  // Stars — rotate with view
+  if(uStars){
+    // Rotate ray direction by inverse planet rotation so stars stay fixed in world
+    mat3 invRot=transpose(uRot);
+    vec3 rrd=invRot*normalize(rd);
+    col+=vec3(stars(rrd));
+    float mw=max(0.,1.-abs(rrd.y+.2)*2.2)*.05*fract(sin(dot(rrd.xy,vec2(12.9898,78.233)))*43758.5);
+    col+=vec3(.35,.30,.65)*mw;
+  }
+
+  // Moon — orbit in planet-local space, then transform to world
+  if(uMoon){
+    float mA=uT*.16;
+    vec3 mLocal=vec3(cos(mA)*2.8,sin(mA*.25)*.45,sin(mA)*2.8);
+    // transpose(uRot) = inverse rotation → local→world
+    mat3 invRot=transpose(uRot);
+    vec3 mPos=invRot*mLocal;
+    vec3 mro=ro-mPos;float mt0,mt1;
+    if(hitS(mro,rd,.21,mt0,mt1)&&mt0>0.){
+      vec3 mn=normalize(mro+rd*mt0);
+      float diff=max(dot(mn,uSun),.0);
+      float c2=fbm(mn*3.,5)*.5+.5;
+      col=mix(vec3(.26,.24,.22),vec3(.58,.55,.50),c2)*(diff*.88+.1);
+    }
+  }
+
+  // ── Ring back (behind planet) ──
+  vec4 rBack=vec4(0.);
+  if(uRings) rBack=ringColor(ro,rd,false);
+
+  // ── Planet ──
+  float tHit=1e9;vec3 nHit=vec3(0.,1.,0.);
+  bool onP=hitDisplaced(ro,rd,tHit,nHit);
+  vec3 surfCol=vec3(0.);
+
+  if(onP){
+    vec3 p=ro+rd*tHit;
+    vec3 gn=normalize(p);
+    vec3 sn=uRot*gn; // local normal for texture
+    float h=heightAt(sn);
+    float sl=seaLvl();
+    float lat=abs(sn.y);
+    float ice=smoothstep(iceStart(),iceStart()+.09,lat+fbm(sn*3.,3)*.1);
+    vec3 sc;
+    if(uSurface){
+      if(h<sl){
+        sc=waterCol(h/sl);
+        // Ocean specular
+        if(uPlanet==0||uPlanet==4){
+          vec3 refl=reflect(-uSun,nHit);
+          sc+=vec3(1.,.94,.82)*pow(max(dot(refl,-rd),.0),55.)*.9;
+        }
+        if(uPlanet==3) sc+=vec3(.92,.22,.01)*fbm(sn*8.,4)*.55;
+      } else {
+        sc=landCol((h-sl)/(1.-sl));
+      }
+      sc=mix(sc,iceCol(),ice);
+    } else {sc=vec3(.38,.52,.80);}
+
+    float diff=max(dot(nHit,uSun),.0);
+    float amb=uPlanet==3?.14:.06;
+    surfCol=sc*(diff*.92+amb);
+
+    // Night lights
+    if(uLights&&uSurface&&(uPlanet==0||uPlanet==4)){
+      float night=1.-smoothstep(-.14,.10,dot(gn,uSun));
+      if(night>.005){
+        float lc=fbm(sn*11.,4);lc=smoothstep(.66,.80,lc)*step(sl,h);
+        surfCol+=mix(vec3(.98,.78,.32),vec3(.18,.88,.48),float(uPlanet==4))*lc*night*.48;
+      }
+    }
+    // Lava glow
+    if(uPlanet==3){
+      float lav=smoothstep(.52,.58,fbm(sn*8.,4));
+      float ng=1.-smoothstep(-.08,.10,dot(gn,uSun));
+      surfCol+=vec3(.92,.20,.01)*lav*ng*.85;
+    }
+  }
+
+  // ── Vol. Clouds ──
+  vec4 cV=vec4(0.);
+  if(uClouds) cV=marchClouds(ro,rd,onP?tHit:1e5);
+
+  // ── Composite surface + clouds ──
+  if(onP) col=mix(surfCol,cV.rgb,cV.a);
+  else if(cV.a>.001) col=mix(col,cV.rgb,cV.a);
+
+  // ── Ring front (over planet) ──
+  if(uRings){
+    vec4 rF=ringColor(ro,rd,true);
+    // Back rings: only where no planet
+    if(!onP) col=mix(col,col*(1.-rBack.a)+rBack.rgb*rBack.a,1.);
+    // Front rings: over everything
+    col=col*(1.-rF.a)+rF.rgb*rF.a;
+  }
+
+  // ── Atmosphere ──
+  if(uAtmo){
+    float aR=1.16;float at0,at1;
+    if(hitS(ro,rd,aR,at0,at1)){
+      float depth;
+      if(onP){depth=clamp((tHit-max(at0,.0))/.18,0.,1.);}
+      else{depth=clamp((at1-max(at0,.0))/.24,0.,1.);}
+      vec3 aC=atmoCol();
+      vec3 atmo=aC*depth*.65;
+      if(!onP&&at0>0.){
+        vec3 ap=normalize(ro+rd*((at0+at1)*.5));
+        float limb=1.-abs(dot(ap,rd));
+        atmo+=aC*pow(limb,2.)*.7;
+        // Sun glint through atmo
+        atmo+=mix(vec3(1.,.6,.22),aC,.4)*pow(max(dot(rd,uSun),.0),10.)*.3;
+      }
+      col+=atmo*.82;
+    }
+  }
+
+  col=pow(max(col,vec3(0.)),vec3(.45));
+  fC=vec4(col,1.);
+}
+`;
+
+function mkS(type,src){
+  const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))console.error(type===gl.VERTEX_SHADER?'VS':'FS',gl.getShaderInfoLog(s));
+  return s;
+}
+const prog=gl.createProgram();
+gl.attachShader(prog,mkS(gl.VERTEX_SHADER,VS));
+gl.attachShader(prog,mkS(gl.FRAGMENT_SHADER,FS));
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog,gl.LINK_STATUS))console.error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+
+const buf=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+const aL=gl.getAttribLocation(prog,'a');
+gl.enableVertexAttribArray(aL);gl.vertexAttribPointer(aL,2,gl.FLOAT,false,0,0);
+
+const U=n=>gl.getUniformLocation(prog,n);
+const L={t:U('uT'),res:U('uRes'),pan:U('uPan'),sun:U('uSun'),rot:U('uRot'),zoom:U('uZoom'),planet:U('uPlanet'),
+  surface:U('uSurface'),disp:U('uDisp'),lights:U('uLights'),
+  clouds:U('uClouds'),atmo:U('uAtmo'),rings:U('uRings'),moon:U('uMoon'),stars:U('uStars')};
+
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;gl.viewport(0,0,canvas.width,canvas.height);}
+window.addEventListener('resize',resize);resize();
+
+// Build 3x3 rotation matrix from rotX, rotY (Euler XY)
+function buildRot(rx,ry){
+  const cx=Math.cos(rx),sx=Math.sin(rx),cy=Math.cos(ry),sy=Math.sin(ry);
+  // Ry * Rx (column major for WebGL)
+  return new Float32Array([
+    cy,      0,  -sy,
+    sx*sy,   cx,  sx*cy,
+    cx*sy,  -sx,  cx*cy
+  ]);
+}
+
+function frame(ts){
+  if (paused) { requestAnimationFrame(frame); return; }
+  t=ts*.001;
+  gl.useProgram(prog);
+  gl.uniform1f(L.t,t);
+  const sx=Math.sin(sunPhi)*Math.cos(sunTheta);
+  const sy=Math.cos(sunPhi);
+  const sz=Math.sin(sunPhi)*Math.sin(sunTheta);
+  gl.uniform3f(L.sun,sx,sy,sz);
+  gl.uniformMatrix3fv(L.rot,false,buildRot(rotX,rotY));
+  gl.uniform1f(L.zoom,zoom);
+  gl.uniform2f(L.res,canvas.width,canvas.height);
+  gl.uniform2f(L.pan,panX,panY);
+  gl.uniform1i(L.planet,planet);
+  gl.uniform1i(L.surface,flags.surface?1:0);
+  gl.uniform1i(L.disp,flags.disp?1:0);
+  gl.uniform1i(L.lights,flags.lights?1:0);
+  gl.uniform1i(L.clouds,flags.clouds?1:0);
+  gl.uniform1i(L.atmo,flags.atmo?1:0);
+  gl.uniform1i(L.rings,flags.rings?1:0);
+  gl.uniform1i(L.moon,flags.moon?1:0);
+  gl.uniform1i(L.stars,flags.stars?1:0);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
