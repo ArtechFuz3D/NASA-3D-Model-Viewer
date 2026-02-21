@@ -96,61 +96,62 @@ scene.add(spotLight.target)
 
 // ─────────────────────────────────────────
 // BACKGROUND SYSTEM
-// 3 modes: 'solid' | 'hdri' | 'earth'
+//
+// Two fully independent axes:
+//   hdriLighting  — whether HDRI drives scene.environment (IBL/reflections)
+//   bgSource      — what fills the background: 'solid' | 'hdri' | 'earth'
+//
+// All 6 combinations are valid, e.g.:
+//   HDRI lighting ON  + solid color background
+//   HDRI lighting ON  + earth image background
+//   HDRI lighting OFF + HDRI texture background (decorative only)
+//   HDRI lighting OFF + earth background
 // ─────────────────────────────────────────
-let bgMode        = 'solid'
-let hdriTexture   = null   // loaded RGBELoader result
-let hdriLoaded    = false
 
-// The CSS earth layer sits behind the canvas (set in style.css)
+let hdriTexture = null
+let hdriLoaded  = false
+
 const earthLayer = document.getElementById('earth-bg')
 
-// HDRI state — mirrors Blender's two independent toggles
-const hdriState = {
-    showBackground:  true,   // HDRI visible as scene background
-    affectsLighting: true,   // HDRI used as environment map for lighting
+// State — two independent controls
+const envState = {
+    hdriLighting: false,   // HDRI → scene.environment (IBL)
+    bgSource:     'solid', // 'solid' | 'hdri' | 'earth'
+    solidColor:   '#0a0e1a',
 }
 
-function applyBgMode(mode) {
-    bgMode = mode
+// Single function that re-applies everything from current state
+function applyEnvironment() {
+    // 1. HDRI lighting (environment map for reflections/IBL)
+    scene.environment = (envState.hdriLighting && hdriTexture)
+        ? hdriTexture
+        : null
 
-    // Always hide earth layer first
+    // 2. Background source — fully independent
     if (earthLayer) earthLayer.style.opacity = '0'
+    scene.background = null
 
-    // Reset Three.js bg/env
-    scene.background  = null
-    scene.environment = null
-    renderer.setClearColor('#0a0e1a', 1)
-
-    if (mode === 'solid') {
-        // handled by renderer clearColor — nothing else needed
-    } else if (mode === 'hdri') {
-        applyHDRI()
-    } else if (mode === 'earth') {
-        renderer.setClearColor('#000000', 0) // transparent so CSS layer shows
+    if (envState.bgSource === 'solid') {
+        renderer.setClearColor(envState.solidColor, 1)
+    } else if (envState.bgSource === 'hdri') {
+        if (hdriTexture) {
+            scene.background = hdriTexture
+            renderer.setClearColor('#000000', 0)
+        } else {
+            // Fallback to solid while HDRI loads
+            renderer.setClearColor(envState.solidColor, 1)
+        }
+    } else if (envState.bgSource === 'earth') {
+        renderer.setClearColor('#000000', 0)
         if (earthLayer) earthLayer.style.opacity = '1'
     }
 }
 
-function applyHDRI() {
-    if (!hdriTexture) return
-
-    if (hdriState.showBackground) {
-        scene.background = hdriTexture
-    } else {
-        scene.background = null
-        renderer.setClearColor('#0a0e1a', 1)
-    }
-
-    scene.environment = hdriState.affectsLighting ? hdriTexture : null
-}
-
-// Load HDRI lazily on first request (Polyhaven space-themed HDR)
-// Using 'moonlit_golf' — a dark night sky HDR, good for space scenes
+// Load HDRI lazily, then re-apply environment
 const HDRI_URL = 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/moonlit_golf_1k.hdr'
 
-function loadHDRI(onDone) {
-    if (hdriLoaded) { onDone?.(); return }
+function ensureHDRI(onReady) {
+    if (hdriLoaded) { onReady(); return }
     setStatus('Loading HDRI…')
     new RGBELoader().load(
         HDRI_URL,
@@ -159,11 +160,11 @@ function loadHDRI(onDone) {
             hdriTexture = tex
             hdriLoaded  = true
             setStatus('')
-            onDone?.()
+            onReady()
         },
         undefined,
         err => {
-            console.warn('HDRI load failed:', err)
+            console.warn('HDRI failed:', err)
             setStatus('HDRI unavailable')
         }
     )
@@ -594,23 +595,33 @@ lightFolder.add(spotLight, 'angle').min(0.05).max(Math.PI / 2).step(0.01).name('
 lightFolder.add(spotLight, 'penumbra').min(0).max(1).step(0.01).name('Spot Penumbra')
 
 // — Background —
-const bgParam = { mode: 'solid', solidColor: '#0a0e1a' }
 const bgFolder = gui.addFolder('🌌 Background')
-bgFolder.add(bgParam, 'mode', ['solid', 'hdri', 'earth']).name('Mode')
+
+// HDRI lighting toggle — independent of what's shown as background
+bgFolder.add(envState, 'hdriLighting').name('HDRI Lighting (IBL)')
     .onChange(v => {
-        if (v === 'hdri' && !hdriLoaded) {
-            loadHDRI(() => applyBgMode('hdri'))
+        if (v && !hdriLoaded) {
+            ensureHDRI(() => applyEnvironment())
         } else {
-            applyBgMode(v)
+            applyEnvironment()
         }
     })
-bgFolder.addColor(bgParam, 'solidColor').name('Solid Color')
-    .onChange(v => { if (bgMode === 'solid') renderer.setClearColor(v, 1) })
-// HDRI-specific toggles (mirrors Blender viewport shading)
-bgFolder.add(hdriState, 'showBackground').name('HDRI Visible')
-    .onChange(() => { if (bgMode === 'hdri') applyHDRI() })
-bgFolder.add(hdriState, 'affectsLighting').name('HDRI Lighting')
-    .onChange(() => { if (bgMode === 'hdri') applyHDRI() })
+
+// Background source — independent of lighting
+bgFolder.add(envState, 'bgSource', ['solid', 'hdri', 'earth']).name('Background')
+    .onChange(v => {
+        const needsHDRI = v === 'hdri' && !hdriLoaded
+        if (needsHDRI) {
+            ensureHDRI(() => applyEnvironment())
+        } else {
+            applyEnvironment()
+        }
+    })
+
+// Solid color picker — active when bgSource === 'solid'
+bgFolder.addColor(envState, 'solidColor').name('Solid Color')
+    .onChange(() => { if (envState.bgSource === 'solid') applyEnvironment() })
+
 bgFolder.open()
 
 // — Motion —
