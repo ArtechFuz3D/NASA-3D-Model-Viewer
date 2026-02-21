@@ -125,7 +125,7 @@ const envState = {
 let iframeReady = false
 function ensurePlanetIframe(cb) {
     if (iframeReady) { cb?.(); return }
-    planetIframe.src = './src/planet-shader.html'
+    planetIframe.src = '/src/planet-shader.html'
     planetIframe.onload = () => { iframeReady = true; cb?.() }
 }
 
@@ -168,7 +168,7 @@ function applyEnvironment() {
 }
 
 // Load HDRI lazily, then re-apply environment
-const HDRI_URL = 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/moonlit_golf_1k.hdr'
+const HDRI_URL = 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/golden_gate_hills_2k.hdr'
 
 function ensureHDRI(onReady) {
     if (hdriLoaded) { onReady(); return }
