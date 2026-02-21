@@ -111,16 +111,27 @@ scene.add(spotLight.target)
 let hdriTexture = null
 let hdriLoaded  = false
 
-const earthLayer = document.getElementById('earth-bg')
+const earthLayer   = document.getElementById('earth-bg')
+const planetIframe = document.getElementById('planet-iframe')
 
 // State — two independent controls
 const envState = {
     hdriLighting: false,   // HDRI → scene.environment (IBL)
-    bgSource:     'solid', // 'solid' | 'hdri' | 'earth'
+    bgSource:     'solid', // 'solid' | 'hdri' | 'earth' | 'planet'
     solidColor:   '#0a0e1a',
 }
 
 // Single function that re-applies everything from current state
+let iframeReady = false
+function ensurePlanetIframe(cb) {
+    if (iframeReady) { cb?.(); return }
+    planetIframe.src = './src/planet-shader.html'
+    planetIframe.onload = () => { iframeReady = true; cb?.() }
+}
+
+function pausePlanet()  { if (iframeReady && planetIframe.contentWindow) planetIframe.contentWindow.postMessage({ type: 'planetConfig', paused: true  }, '*') }
+function resumePlanet() { if (iframeReady && planetIframe.contentWindow) planetIframe.contentWindow.postMessage({ type: 'planetConfig', paused: false }, '*') }
+
 function applyEnvironment() {
     // 1. HDRI lighting (environment map for reflections/IBL)
     scene.environment = (envState.hdriLighting && hdriTexture)
@@ -128,22 +139,31 @@ function applyEnvironment() {
         : null
 
     // 2. Background source — fully independent
-    if (earthLayer) earthLayer.style.opacity = '0'
+    if (earthLayer)   earthLayer.style.opacity   = '0'
+    if (planetIframe) planetIframe.classList.remove('active')
     scene.background = null
 
     if (envState.bgSource === 'solid') {
         renderer.setClearColor(envState.solidColor, 1)
+        pausePlanet()
     } else if (envState.bgSource === 'hdri') {
         if (hdriTexture) {
             scene.background = hdriTexture
             renderer.setClearColor('#000000', 0)
         } else {
-            // Fallback to solid while HDRI loads
             renderer.setClearColor(envState.solidColor, 1)
         }
+        pausePlanet()
     } else if (envState.bgSource === 'earth') {
         renderer.setClearColor('#000000', 0)
         if (earthLayer) earthLayer.style.opacity = '1'
+        pausePlanet()
+    } else if (envState.bgSource === 'planet') {
+        renderer.setClearColor('#000000', 0)
+        ensurePlanetIframe(() => {
+            resumePlanet()
+            planetIframe.classList.add('active')
+        })
     }
 }
 
@@ -544,8 +564,123 @@ wire('btn-autorotate', () => {
 })
 
 // ─────────────────────────────────────────
-// GUI
+// PLANET SCENE PANEL
 // ─────────────────────────────────────────
+const planetPanel  = document.getElementById('planet-panel')
+const menuViewBtn  = document.getElementById('menu-view')
+const panelClose   = document.getElementById('planet-panel-close')
+
+function sendPlanet(msg) {
+    // postMessage into the iframe — only works when iframe is loaded
+    if (planetIframe && planetIframe.contentWindow) {
+        planetIframe.contentWindow.postMessage({ type: 'planetConfig', ...msg }, '*')
+    }
+}
+
+function openPlanetPanel()  {
+    if (!planetPanel) return
+    planetPanel.classList.add('open')
+    planetPanel.setAttribute('aria-hidden', 'false')
+    if (menuViewBtn) menuViewBtn.classList.add('active')
+    if (viewport) viewport.classList.add('planet-orbit-mode')
+    controls.enabled = false
+}
+function closePlanetPanel() {
+    if (!planetPanel) return
+    planetPanel.classList.remove('open')
+    planetPanel.setAttribute('aria-hidden', 'true')
+    if (menuViewBtn) menuViewBtn.classList.remove('active')
+    if (viewport) viewport.classList.remove('planet-orbit-mode')
+    controls.enabled = true
+    pfwd.active = false
+}
+
+if (menuViewBtn) {
+    menuViewBtn.addEventListener('click', () => {
+        const isOpen = planetPanel && planetPanel.classList.contains('open')
+        isOpen ? closePlanetPanel() : openPlanetPanel()
+    })
+}
+if (panelClose) panelClose.addEventListener('click', closePlanetPanel)
+
+// Close on Escape
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closePlanetPanel()
+})
+
+// ── Planet orbit forwarding ──────────────────────────────
+// When the panel is open, pointer events on the VIEWPORT
+// (outside the panel inner box) are forwarded as orbit deltas
+// to the planet shader iframe. OrbitControls is suspended.
+let pfwd = { active: false, btn: -1, ctrl: false, lx: 0, ly: 0 }
+
+const viewport = document.getElementById('viewport')
+
+function isPlanetPanelOpen() {
+    return planetPanel && planetPanel.classList.contains('open')
+}
+
+function pfwdDown(e) {
+    if (!isPlanetPanelOpen()) return   // panel closed — do nothing, let OrbitControls have it
+    const inner = document.getElementById('planet-panel-inner')
+    if (inner && inner.contains(e.target)) return  // click inside panel UI — don't steal it
+    // Panel is open and click is on viewport — take control
+    e.preventDefault()
+    e.stopPropagation()
+    pfwd.active = true
+    pfwd.btn    = e.button ?? 0
+    pfwd.ctrl   = e.ctrlKey
+    pfwd.lx     = e.clientX
+    pfwd.ly     = e.clientY
+}
+function pfwdMove(e) {
+    if (!pfwd.active) return
+    const dx = e.clientX - pfwd.lx
+    const dy = e.clientY - pfwd.ly
+    pfwd.lx = e.clientX
+    pfwd.ly = e.clientY
+    if (pfwd.ctrl || e.ctrlKey) {
+        sendPlanet({ dPanX: dx * .004, dPanY: -dy * .004 })
+    } else if (pfwd.btn === 0) {
+        sendPlanet({ dRotY: dx * .004, dRotX: dy * .004 })
+    } else if (pfwd.btn === 2) {
+        sendPlanet({ dSunX: dx * .005, dSunY: dy * .005 })
+    }
+}
+function pfwdUp() { pfwd.active = false; pfwd.ctrl = false }
+function pfwdWheel(e) {
+    if (!isPlanetPanelOpen()) return
+    const inner = document.getElementById('planet-panel-inner')
+    if (inner && inner.contains(e.target)) return
+    e.preventDefault()
+    sendPlanet({ dZoom: -e.deltaY * .001 })
+}
+
+// All pfwd listeners use capture so they run before OrbitControls,
+// but only act when isPlanetPanelOpen() — otherwise pass through untouched
+viewport.addEventListener('mousedown',  pfwdDown,  { capture: true })
+window.addEventListener ('mousemove',   pfwdMove)
+window.addEventListener ('mouseup',     pfwdUp)
+// Non-passive so we can preventDefault inside pfwdWheel
+viewport.addEventListener('wheel', pfwdWheel, { passive: false, capture: true })
+viewport.addEventListener('contextmenu', e => { if (isPlanetPanelOpen()) e.preventDefault() }, { capture: true })
+
+// Planet preset buttons — send planet index to iframe
+document.querySelectorAll('.pp-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.pp-preset').forEach(b => b.classList.remove('active'))
+        btn.classList.add('active')
+        sendPlanet({ planet: parseInt(btn.dataset.planet) })
+    })
+})
+
+// Toggle switches — send flag + value to iframe
+document.querySelectorAll('.pp-tog').forEach(tog => {
+    tog.addEventListener('click', () => {
+        tog.classList.toggle('on')
+        sendPlanet({ flag: tog.dataset.flag, value: tog.classList.contains('on') })
+    })
+})
 const gui = new GUI({ width: 280 })
 gui.title('Hologram Viewer')
 
@@ -608,7 +743,7 @@ bgFolder.add(envState, 'hdriLighting').name('HDRI Lighting (IBL)')
     })
 
 // Background source — independent of lighting
-bgFolder.add(envState, 'bgSource', ['solid', 'hdri', 'earth']).name('Background')
+bgFolder.add(envState, 'bgSource', ['solid', 'hdri', 'earth', 'planet']).name('Background')
     .onChange(v => {
         const needsHDRI = v === 'hdri' && !hdriLoaded
         if (needsHDRI) {
@@ -626,21 +761,52 @@ bgFolder.open()
 
 // — Motion —
 const motionState = {
-    enabled: false,
-    type: 'none',
-    wx: 0, wy: 0, wz: 0,
-    vx: 0, vy: 0, vz: 0,
-    showTrajectory: false,
-    trajectoryLength: 200,
+    enabled:         false,
+    type:            'none',   // 'none' | 'rotation' | 'linear' | 'circular'
+    wx: 0, wy: 0.5, wz: 0,    // angular velocity (rad/s) for rotation mode
+    vx: 0, vy: 0,   vz: 0,    // linear velocity (units/s) for linear mode
+    circularRadius:  3,        // radius for circular mode
+    circularSpeed:   1,        // revolutions/s for circular mode
+    circularAxis:    'xz',     // plane for circular mode
+    showTrajectory:  false,
+    trajectoryLength: 300,
+    clearTrajectory: () => {
+        trajectoryPoints.length = 0
+        if (trajectoryLine) {
+            scene.remove(trajectoryLine)
+            trajectoryLine.geometry.dispose()
+            trajectoryLine.material.dispose()
+            trajectoryLine = null
+        }
+    }
 }
+
 const motFolder = gui.addFolder('🎮 Motion')
 motFolder.add(motionState, 'enabled').name('Enable')
 motFolder.add(motionState, 'type', ['none', 'rotation', 'linear', 'circular']).name('Type')
-motFolder.add(motionState, 'wx').min(-5).max(5).step(0.01).name('ω X (rad/s)')
-motFolder.add(motionState, 'wy').min(-5).max(5).step(0.01).name('ω Y (rad/s)')
-motFolder.add(motionState, 'wz').min(-5).max(5).step(0.01).name('ω Z (rad/s)')
-motFolder.add(motionState, 'showTrajectory').name('Trajectory')
-motFolder.add(motionState, 'trajectoryLength').min(10).max(1000).step(10).name('Traj Length')
+
+// Rotation controls
+const rotGroup = motFolder.addFolder('  Rotation')
+rotGroup.add(motionState, 'wx').min(-5).max(5).step(0.01).name('ω X (rad/s)')
+rotGroup.add(motionState, 'wy').min(-5).max(5).step(0.01).name('ω Y (rad/s)')
+rotGroup.add(motionState, 'wz').min(-5).max(5).step(0.01).name('ω Z (rad/s)')
+
+// Linear controls
+const linGroup = motFolder.addFolder('  Linear')
+linGroup.add(motionState, 'vx').min(-5).max(5).step(0.01).name('Vel X (u/s)')
+linGroup.add(motionState, 'vy').min(-5).max(5).step(0.01).name('Vel Y (u/s)')
+linGroup.add(motionState, 'vz').min(-5).max(5).step(0.01).name('Vel Z (u/s)')
+
+// Circular controls
+const circGroup = motFolder.addFolder('  Circular')
+circGroup.add(motionState, 'circularRadius').min(0.5).max(10).step(0.1).name('Radius')
+circGroup.add(motionState, 'circularSpeed').min(-5).max(5).step(0.1).name('Speed (rev/s)')
+circGroup.add(motionState, 'circularAxis', ['xz', 'xy', 'yz']).name('Plane')
+
+// Trajectory
+motFolder.add(motionState, 'showTrajectory').name('Show Trajectory')
+motFolder.add(motionState, 'trajectoryLength').min(10).max(2000).step(10).name('Traj Length')
+motFolder.add(motionState, 'clearTrajectory').name('🗑️ Clear Trajectory')
 
 // — Camera —
 const camFolder = gui.addFolder('📷 Camera')
@@ -656,7 +822,11 @@ const simFolder = gui.addFolder('⚙️ Simulation')
 simFolder.add(simState, 'running').name('Running')
 simFolder.add(simState, 'timeScale').min(0.1).max(10).step(0.1).name('Time Scale')
 simFolder.add(simState, 'currentTime').name('Sim Time (s)').disable().listen()
-simFolder.add({ reset: () => { simState.currentTime = 0; if (customModel) { customModel.position.set(0,0,0); customModel.rotation.set(0,0,0) }; trajectoryPoints.length = 0 } }, 'reset').name('🔄 Reset')
+simFolder.add({ reset: () => {
+    simState.currentTime = 0
+    if (customModel) { customModel.position.set(0,0,0); customModel.rotation.set(0,0,0) }
+    motionState.clearTrajectory()
+} }, 'reset').name('🔄 Reset')
 simFolder.open()
 
 // — Performance (read-only) —
@@ -671,13 +841,22 @@ perfFolder.add(perfState, 'memMB').name('Memory (MB)').disable().listen()
 // ─────────────────────────────────────────
 // ANIMATION LOOP
 // ─────────────────────────────────────────
-const clock    = new THREE.Clock()
+// Single time source via performance.now() — avoids the
+// getElapsedTime()/getDelta() ordering bug in THREE.Clock
 let frameCount = 0
 let fpsTimer   = 0
+let lastTime   = performance.now()
+let elapsed    = 0
+
+// Reusable trajectory geometry — update buffer in place instead of creating new Line each frame
+let trajGeo = null
+let trajMat = null
 
 const tick = () => {
-    const elapsed = clock.getElapsedTime()
-    const delta   = Math.min(clock.getDelta(), 0.05)
+    const now   = performance.now()
+    const delta = Math.min((now - lastTime) / 1000, 0.05)
+    lastTime    = now
+    elapsed    += delta
 
     // FPS
     frameCount++
@@ -693,37 +872,63 @@ const tick = () => {
     // Hologram shader time
     hologramMaterial.uniforms.uTime.value = elapsed
 
-    // Simulation
+    // Simulation clock
     if (simState.running) simState.currentTime += delta * simState.timeScale
 
-    // Motion
-    if (customModel && simState.running && motionState.enabled) {
+    // ── Motion ──
+    if (customModel && motionState.enabled && motionState.type !== 'none') {
+        const t = elapsed // use raw elapsed so circular motion is frame-rate independent
+
         if (motionState.type === 'rotation') {
             customModel.rotation.x += motionState.wx * delta
             customModel.rotation.y += motionState.wy * delta
             customModel.rotation.z += motionState.wz * delta
+
         } else if (motionState.type === 'linear') {
             customModel.position.x += motionState.vx * delta
             customModel.position.y += motionState.vy * delta
             customModel.position.z += motionState.vz * delta
+
         } else if (motionState.type === 'circular') {
-            customModel.position.x = Math.cos(elapsed) * 3
-            customModel.position.z = Math.sin(elapsed) * 3
+            const angle = t * motionState.circularSpeed * Math.PI * 2
+            const r     = motionState.circularRadius
+            if (motionState.circularAxis === 'xz') {
+                customModel.position.x = Math.cos(angle) * r
+                customModel.position.z = Math.sin(angle) * r
+            } else if (motionState.circularAxis === 'xy') {
+                customModel.position.x = Math.cos(angle) * r
+                customModel.position.y = Math.sin(angle) * r
+            } else { // yz
+                customModel.position.y = Math.cos(angle) * r
+                customModel.position.z = Math.sin(angle) * r
+            }
         }
     }
 
-    // Trajectory
+    // ── Trajectory ──
     if (customModel && motionState.showTrajectory) {
         trajectoryPoints.push(customModel.position.clone())
         if (trajectoryPoints.length > motionState.trajectoryLength) trajectoryPoints.shift()
+
         if (trajectoryPoints.length > 1) {
-            if (trajectoryLine) { scene.remove(trajectoryLine); trajectoryLine.geometry.dispose(); trajectoryLine.material.dispose() }
-            trajectoryLine = new THREE.Line(
-                new THREE.BufferGeometry().setFromPoints(trajectoryPoints),
-                new THREE.LineBasicMaterial({ color: 0x00ff00 })
-            )
-            scene.add(trajectoryLine)
+            if (!trajGeo) {
+                // First time — create line
+                trajGeo = new THREE.BufferGeometry().setFromPoints(trajectoryPoints)
+                trajMat = new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.7 })
+                trajectoryLine = new THREE.Line(trajGeo, trajMat)
+                scene.add(trajectoryLine)
+            } else {
+                // Update geometry in place — much cheaper than creating a new Line every frame
+                trajGeo.setFromPoints(trajectoryPoints)
+            }
         }
+    } else if (trajectoryLine && !motionState.showTrajectory) {
+        scene.remove(trajectoryLine)
+        trajGeo.dispose()
+        trajMat.dispose()
+        trajectoryLine = null
+        trajGeo = null
+        trajMat = null
     }
 
     // Bounding box update
