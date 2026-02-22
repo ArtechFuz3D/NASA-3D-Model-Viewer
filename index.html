@@ -1,32 +1,105 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>NASA 3D Hologram Viewer</title>
+  <head>
+    <meta charset="UTF-8" />
+    <title>NASA 3D Model Viewer</title>
 
-  <!-- Primary Meta -->
-  <meta name="description" content="Interactive holographic viewer for NASA 3D models using Three.js and custom shaders." />
-  <meta name="author" content="ArtechFuz3D" />
-  <meta name="robots" content="index, follow" />
+    <!-- Viewport -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Open Graph -->
-  <meta property="og:title" content="NASA 3D Hologram Viewer" />
-  <meta property="og:description" content="Browse and view NASA’s open 3D models with a real-time hologram shader." />
-  <meta property="og:type" content="website" />
+    <!-- Primary Meta -->
+    <meta
+      name="description"
+      content="Interactive viewer for NASA 3D models using Three.js and custom GLSL shaders. Browse spacecraft, rovers, telescopes and more from NASA's open 3D Resources library."
+    />
+    <meta name="author" content="ArtechFuz3D" />
+    <meta
+      name="keywords"
+      content="NASA, 3D models, hologram, Three.js, WebGL, spacecraft, rovers, space, interactive, viewer"
+    />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#0b0d12" />
 
-  <!-- Twitter -->
-  <meta name="twitter:card" content="summary_large_image" />
+    <!-- Open Graph -->
+    <meta property="og:title" content="NASA 3D Model Viewer" />
+    <meta
+      property="og:description"
+      content="Browse and view NASA's open 3D models with a real-time hologram shader. Spacecraft, rovers, telescopes and more — all rendered in WebGL."
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://artechfuz3d.github.io/NASA-3D-Model-Viewer/"
+    />
+    <meta
+      property="og:image"
+      content="https://artechfuz3d.github.io/NASA-3D-Model-Viewer/preview-alt.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="NASA 3D Model Viewer — holographic spacecraft rendered in WebGL"
+    />
+    <meta property="og:site_name" content="ArtechFuz3D" />
+    <meta property="og:locale" content="en_US" />
 
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="NASA 3D Model Viewer" />
+    <meta
+      name="twitter:description"
+      content="Browse and view NASA's open 3D models with a real-time hologram shader built in Three.js."
+    />
+    <meta
+      name="twitter:image"
+      content="https://artechfuz3d.github.io/NASA-3D-Model-Viewer/preview-alt.png"
+    />
+    <meta
+      name="twitter:image:alt"
+      content="NASA 3D Model Viewer — holographic spacecraft rendered in WebGL"
+    />
+    <meta name="twitter:creator" content="@ArtechFuz3D" />
 
-   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
 
-  <link rel="stylesheet" href="./src/style.css" />
-</head>
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="192x192"
+      href="/android-chrome-192x192.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="512x512"
+      href="/android-chrome-512x512.png"
+    />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-  <!-- TOP TOOLBAR -->
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!-- Safari pinned tab (optional, if generated) -->
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#0b0d12" />
+
+    <!-- Fallback favicon.ico -->
+    <link rel="shortcut icon" href="/favicon.ico" />
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+<!-- TOP TOOLBAR -->
   <header id="toolbar">
     <div class="toolbar-left">
       <div class="app-logo">
@@ -35,13 +108,23 @@
           <ellipse cx="10" cy="10" rx="8" ry="3.5" stroke="#70c1ff" stroke-width="1.5"/>
           <line x1="10" y1="2" x2="10" y2="18" stroke="#70c1ff" stroke-width="1.5"/>
         </svg>
-        <span>NASA HOLOGRAM VIEWER</span>
+        <span>NASA 3D MODEL VIEWER</span>
       </div>
       <nav class="toolbar-menu">
-        <button class="menu-btn">File</button>
-        <button class="menu-btn">View</button>
+        <button class="menu-btn" id="menu-file">File</button>
+        <button class="menu-btn" id="menu-view">View</button>
         <button class="menu-btn">Tools</button>
-        <button class="menu-btn">Help</button>
+        <button class="menu-btn" id="menu-help">Help</button>
+      </nav>
+    </div>
+
+    <!-- File dropdown -->
+    <div id="file-dropdown" class="menu-dropdown" aria-hidden="true">
+      <button class="menu-drop-item" id="dd-export-settings">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v7M3 5l3 3 3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 9v1.5h10V9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        Export Settings JSON
+      </button>
+    </div>
       </nav>
     </div>
 
@@ -74,82 +157,597 @@
         <span class="fps-label">FPS</span>
       </div>
       <div class="user-avatar">
-        <img src="./src/avatar.png" alt="User" onerror="this.style.display='none'" />
+        <img src="/avatar.png" alt="User" onerror="this.style.display='none'" />
       </div>
     </div>
   </header>
 
-  <!-- MAIN LAYOUT -->
-  <div id="app">
-
-    <!-- LEFT SIDEBAR -->
-    <aside id="sidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-tabs">
-          <button class="stab active" data-tab="models">Models</button>
-          <button class="stab" data-tab="favorites">Saved</button>
+    <!-- MAIN LAYOUT -->
+    <div id="app">
+      <!-- LEFT SIDEBAR -->
+      <aside id="sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-tabs">
+            <button class="stab active" data-tab="models">Models</button>
+            <button class="stab" data-tab="favorites">Saved</button>
+          </div>
         </div>
-      </div>
 
-      <div class="sidebar-search">
-        <svg width="13" height="13" viewBox="0 0 13 13" class="search-icon"><circle cx="5.5" cy="5.5" r="4" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M9 9l2.5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-        <input type="text" id="searchInput" placeholder="Search models…" autocomplete="off" />
-      </div>
-
-      <div class="category-row">
-        <button class="ctab active" data-cat="all">All</button>
-        <button class="ctab" data-cat="spacecraft">Spacecraft</button>
-        <button class="ctab" data-cat="rovers">Rovers</button>
-        <button class="ctab" data-cat="stations">Stations</button>
-      </div>
-
-      <div id="model-grid">
-        <div class="grid-loading">
-          <div class="spinner"></div>
-          <div id="status">Fetching models…</div>
+        <div class="sidebar-search">
+          <svg width="13" height="13" viewBox="0 0 13 13" class="search-icon">
+            <circle
+              cx="5.5"
+              cy="5.5"
+              r="4"
+              stroke="currentColor"
+              stroke-width="1.2"
+              fill="none"
+            />
+            <path
+              d="M9 9l2.5 2.5"
+              stroke="currentColor"
+              stroke-width="1.2"
+              stroke-linecap="round"
+            />
+          </svg>
+          <input
+            type="text"
+            id="searchInput"
+            placeholder="Search models…"
+            autocomplete="off"
+          />
         </div>
-      </div>
 
-      <!-- Hidden select kept for JS compatibility -->
-      <select id="modelSelect" style="display:none" aria-hidden="true"></select>
-    </aside>
+        <div class="category-row">
+          <button class="ctab active" data-cat="all">All</button>
+          <button class="ctab" data-cat="spacecraft">Spacecraft</button>
+          <button class="ctab" data-cat="rovers">Rovers</button>
+          <button class="ctab" data-cat="stations">Stations</button>
+        </div>
 
-    <!-- VIEWPORT -->
+        <div id="model-grid">
+          <div class="grid-loading">
+            <div class="spinner"></div>
+            <div id="status">Fetching models…</div>
+          </div>
+        </div>
+
+        <!-- Hidden select kept for JS compatibility -->
+        <select
+          id="modelSelect"
+          style="display: none"
+          aria-hidden="true"
+        ></select>
+      </aside>
+
+
+ <!-- VIEWPORT -->
     <main id="viewport">
+      <div id="earth-bg"></div>
+      <iframe id="planet-iframe" tabindex="-1" aria-hidden="true"></iframe>
       <canvas class="webgl"></canvas>
 
-      <!-- Corner labels -->
-      <div class="vp-label top-left">PERSPECTIVE · HOLOGRAM</div>
-      <div class="vp-label top-right" id="model-name-display">SELECT A MODEL</div>
-      <div class="vp-label bot-left" id="poly-count"></div>
-      <div class="vp-label bot-right" id="load-progress"></div>
+        <!-- Corner labels -->
+        <div class="vp-label top-left">PERSPECTIVE · HOLOGRAM</div>
+        <div class="vp-label top-right" id="model-name-display">
+          SELECT A MODEL
+        </div>
+        <div class="vp-label bot-left" id="poly-count"></div>
+        <div class="vp-label bot-right" id="load-progress"></div>
 
-      <!-- Axis indicator -->
-      <div id="axis-gizmo">
-        <div class="gizmo-axis" style="color:#ff4d4d">X</div>
-        <div class="gizmo-axis" style="color:#4dff91">Y</div>
-        <div class="gizmo-axis" style="color:#4d9fff">Z</div>
+        <!-- Axis indicator -->
+        <div id="axis-gizmo">
+          <div class="gizmo-axis" style="color: #ff4d4d">X</div>
+          <div class="gizmo-axis" style="color: #4dff91">Y</div>
+          <div class="gizmo-axis" style="color: #4d9fff">Z</div>
+        </div>
+      </main>
+
+      <!-- RIGHT PANEL -->
+      <aside id="right-panel" class="rp-collapsed">
+
+        <!-- Collapse toggle tab -->
+        <button id="rp-toggle" title="Toggle panel">
+          <svg id="rp-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <polyline points="8,2 4,6 8,10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <!-- Icon tab strip -->
+        <div id="rp-tabs">
+          <button class="rp-tab active" data-pane="vis"    title="Visualization">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M1 8c1.5-4 11.5-4 14 0-2.5 4-12.5 4-14 0z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="rp-tab" data-pane="light"  title="Lighting">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="7" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M8 1v1M8 13v1M1 7h1M13 7h1M3 3l.7.7M11.3 11.3l.7.7M11.3 3l-.7.7M4.7 11.3l-.7.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M6 11h4l-.6 2H6.6L6 11z" stroke="currentColor" stroke-width="1.2"/></svg>
+          </button>
+          <button class="rp-tab" data-pane="bg"     title="Background">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.4"/><circle cx="5.5" cy="5.5" r="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M1 11l4-3 3 2.5 2-2 4 4" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="rp-tab" data-pane="motion" title="Motion">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 2"/><path d="M8 4v4l2.5 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </button>
+          <button class="rp-tab" data-pane="camera" title="Camera">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="4" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M11 7l4-2v6l-4-2V7z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="6" cy="8" r="2" stroke="currentColor" stroke-width="1.2"/></svg>
+          </button>
+          <button class="rp-tab" data-pane="sim"    title="Simulation">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M8 4v4.5l3 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </button>
+          <button class="rp-tab" data-pane="perf"   title="Performance">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 12 L5 7 L8 9 L11 4 L14 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="rp-tab" data-pane="help"   title="Help &amp; About">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M6.5 6.5a1.5 1.5 0 1 1 2 1.4C8 8.5 8 9 8 9.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.75" fill="currentColor"/></svg>
+          </button>
+        </div>
+
+        <!-- Pane content -->
+        <div id="rp-body">
+
+          <!-- ── VISUALIZATION ── -->
+          <div class="rp-pane active" data-pane="vis">
+            <div class="rp-pane-title">Visualization</div>
+
+            <div class="rp-section">
+              <div class="rp-label">Material Mode</div>
+              <div class="rp-seg" id="mat-mode-seg">
+                <button class="seg-btn active" data-val="hologram">Holo</button>
+                <button class="seg-btn"        data-val="original">Real</button>
+                <button class="seg-btn"        data-val="wireframe">Wire</button>
+                <button class="seg-btn"        data-val="clay">Clay</button>
+              </div>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-row">
+                <label class="rp-lbl">Hologram Color</label>
+                <input type="color" id="holo-color" value="#70c1ff" class="rp-color">
+              </div>
+              <div class="rp-row">
+                <label class="rp-lbl">Aberration</label>
+                <div class="rp-slider-wrap">
+                  <input type="range" id="aberration" min="0" max="10" step="0.1" value="3.0" class="rp-range">
+                  <span class="rp-val" id="aberration-val">3.0</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-label">Overlays</div>
+              <div class="rp-row"><label class="rp-lbl">Grid</label>            <div class="rp-tog on"  id="tog-grid"></div></div>
+              <div class="rp-row"><label class="rp-lbl">Origin Axes</label>    <div class="rp-tog on"  id="tog-axes"></div></div>
+              <div class="rp-row"><label class="rp-lbl">Bounding Box</label>   <div class="rp-tog"     id="tog-bbox"></div></div>
+              <div class="rp-row"><label class="rp-lbl">Local Axes</label>     <div class="rp-tog"     id="tog-laxes"></div></div>
+            </div>
+          </div>
+
+          <!-- ── LIGHTING ── -->
+          <div class="rp-pane" data-pane="light">
+            <div class="rp-pane-title">Lighting</div>
+
+            <div class="rp-section">
+              <div class="rp-label">Ambient</div>
+              <div class="rp-row">
+                <label class="rp-lbl">Intensity</label>
+                <div class="rp-slider-wrap">
+                  <input type="range" id="amb-int" min="0" max="2" step="0.05" value="0.25" class="rp-range">
+                  <span class="rp-val" id="amb-int-val">0.25</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-row"><label class="rp-lbl">Key Light</label>   <div class="rp-tog on" id="tog-key"></div></div>
+              <div class="rp-row">
+                <label class="rp-lbl">Key Color</label>
+                <input type="color" id="key-color" value="#fff4e0" class="rp-color">
+              </div>
+              <div class="rp-row">
+                <label class="rp-lbl">Intensity</label>
+                <div class="rp-slider-wrap">
+                  <input type="range" id="key-int" min="0" max="4" step="0.05" value="1.2" class="rp-range">
+                  <span class="rp-val" id="key-int-val">1.2</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-row"><label class="rp-lbl">Fill Light</label>  <div class="rp-tog on" id="tog-fill"></div></div>
+              <div class="rp-row">
+                <label class="rp-lbl">Fill Color</label>
+                <input type="color" id="fill-color" value="#8090ff" class="rp-color">
+              </div>
+              <div class="rp-row">
+                <label class="rp-lbl">Intensity</label>
+                <div class="rp-slider-wrap">
+                  <input type="range" id="fill-int" min="0" max="2" step="0.05" value="0.4" class="rp-range">
+                  <span class="rp-val" id="fill-int-val">0.4</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-row"><label class="rp-lbl">Rim Light</label>   <div class="rp-tog on" id="tog-rim"></div></div>
+              <div class="rp-row">
+                <label class="rp-lbl">Rim Color</label>
+                <input type="color" id="rim-color" value="#c0e8ff" class="rp-color">
+              </div>
+              <div class="rp-row">
+                <label class="rp-lbl">Intensity</label>
+                <div class="rp-slider-wrap">
+                  <input type="range" id="rim-int" min="0" max="2" step="0.05" value="0.6" class="rp-range">
+                  <span class="rp-val" id="rim-int-val">0.6</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-row"><label class="rp-lbl">Point Light</label> <div class="rp-tog" id="tog-point"></div></div>
+              <div class="rp-row">
+                <label class="rp-lbl">Point Color</label>
+                <input type="color" id="point-color" value="#ff8844" class="rp-color">
+              </div>
+              <div class="rp-row">
+                <label class="rp-lbl">Intensity</label>
+                <div class="rp-slider-wrap">
+                  <input type="range" id="point-int" min="0" max="5" step="0.1" value="1.5" class="rp-range">
+                  <span class="rp-val" id="point-int-val">1.5</span>
+                </div>
+              </div>
+              <div class="rp-row">
+                <label class="rp-lbl">X / Y / Z</label>
+                <div class="rp-xyz">
+                  <input type="range" id="point-x" min="-10" max="10" step="0.1" value="3" class="rp-range">
+                  <input type="range" id="point-y" min="-10" max="10" step="0.1" value="2" class="rp-range">
+                  <input type="range" id="point-z" min="-10" max="10" step="0.1" value="3" class="rp-range">
+                </div>
+              </div>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-row"><label class="rp-lbl">Spot Light</label>  <div class="rp-tog" id="tog-spot"></div></div>
+              <div class="rp-row">
+                <label class="rp-lbl">Intensity</label>
+                <div class="rp-slider-wrap">
+                  <input type="range" id="spot-int" min="0" max="8" step="0.1" value="2.0" class="rp-range">
+                  <span class="rp-val" id="spot-int-val">2.0</span>
+                </div>
+              </div>
+              <div class="rp-row">
+                <label class="rp-lbl">Angle</label>
+                <div class="rp-slider-wrap">
+                  <input type="range" id="spot-angle" min="0.05" max="1.57" step="0.01" value="0.39" class="rp-range">
+                  <span class="rp-val" id="spot-angle-val">0.39</span>
+                </div>
+              </div>
+              <div class="rp-row">
+                <label class="rp-lbl">Penumbra</label>
+                <div class="rp-slider-wrap">
+                  <input type="range" id="spot-pen" min="0" max="1" step="0.01" value="0.3" class="rp-range">
+                  <span class="rp-val" id="spot-pen-val">0.30</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── BACKGROUND ── -->
+          <div class="rp-pane" data-pane="bg">
+            <div class="rp-pane-title">Background</div>
+
+            <div class="rp-section">
+              <div class="rp-label">Source</div>
+              <div class="rp-bg-tiles">
+                <button class="bg-tile active" data-bg="solid">
+                  <div class="bg-tile-icon">⬛</div>
+                  <span>Solid</span>
+                </button>
+                <button class="bg-tile" data-bg="hdri">
+                  <div class="bg-tile-icon">🌅</div>
+                  <span>HDRI</span>
+                </button>
+                <button class="bg-tile" data-bg="earth">
+                  <div class="bg-tile-icon">🌍</div>
+                  <span>Earth</span>
+                </button>
+                <button class="bg-tile" data-bg="planet">
+                  <div class="bg-tile-icon">🪐</div>
+                  <span>Planet</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="rp-section" id="solid-color-row">
+              <div class="rp-row">
+                <label class="rp-lbl">Color</label>
+                <input type="color" id="bg-solid-color" value="#0a0e1a" class="rp-color">
+              </div>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-row">
+                <label class="rp-lbl">HDRI Lighting (IBL)</label>
+                <div class="rp-tog" id="tog-hdri"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── MOTION ── -->
+          <div class="rp-pane" data-pane="motion">
+            <div class="rp-pane-title">Motion</div>
+
+            <div class="rp-section">
+              <div class="rp-row"><label class="rp-lbl">Enable</label><div class="rp-tog" id="tog-motion"></div></div>
+              <div class="rp-label" style="margin-top:8px">Type</div>
+              <div class="rp-seg" id="motion-type-seg">
+                <button class="seg-btn active" data-val="none">None</button>
+                <button class="seg-btn" data-val="rotation">Rot</button>
+                <button class="seg-btn" data-val="linear">Lin</button>
+                <button class="seg-btn" data-val="circular">Circ</button>
+              </div>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-label">Rotation (rad/s)</div>
+              <div class="rp-row"><label class="rp-lbl">ω X</label>
+                <div class="rp-slider-wrap"><input type="range" id="wx" min="-5" max="5" step="0.01" value="0" class="rp-range"><span class="rp-val" id="wx-val">0.00</span></div>
+              </div>
+              <div class="rp-row"><label class="rp-lbl">ω Y</label>
+                <div class="rp-slider-wrap"><input type="range" id="wy" min="-5" max="5" step="0.01" value="0.5" class="rp-range"><span class="rp-val" id="wy-val">0.50</span></div>
+              </div>
+              <div class="rp-row"><label class="rp-lbl">ω Z</label>
+                <div class="rp-slider-wrap"><input type="range" id="wz" min="-5" max="5" step="0.01" value="0" class="rp-range"><span class="rp-val" id="wz-val">0.00</span></div>
+              </div>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-label">Linear (units/s)</div>
+              <div class="rp-row"><label class="rp-lbl">Vel X</label>
+                <div class="rp-slider-wrap"><input type="range" id="vx" min="-5" max="5" step="0.01" value="0" class="rp-range"><span class="rp-val" id="vx-val">0.00</span></div>
+              </div>
+              <div class="rp-row"><label class="rp-lbl">Vel Y</label>
+                <div class="rp-slider-wrap"><input type="range" id="vy" min="-5" max="5" step="0.01" value="0" class="rp-range"><span class="rp-val" id="vy-val">0.00</span></div>
+              </div>
+              <div class="rp-row"><label class="rp-lbl">Vel Z</label>
+                <div class="rp-slider-wrap"><input type="range" id="vz" min="-5" max="5" step="0.01" value="0" class="rp-range"><span class="rp-val" id="vz-val">0.00</span></div>
+              </div>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-label">Circular</div>
+              <div class="rp-row"><label class="rp-lbl">Radius</label>
+                <div class="rp-slider-wrap"><input type="range" id="circ-r" min="0.5" max="10" step="0.1" value="3" class="rp-range"><span class="rp-val" id="circ-r-val">3.0</span></div>
+              </div>
+              <div class="rp-row"><label class="rp-lbl">Speed</label>
+                <div class="rp-slider-wrap"><input type="range" id="circ-spd" min="-5" max="5" step="0.1" value="1" class="rp-range"><span class="rp-val" id="circ-spd-val">1.0</span></div>
+              </div>
+              <div class="rp-row">
+                <label class="rp-lbl">Plane</label>
+                <select id="circ-axis" class="rp-select"><option value="xz">XZ</option><option value="xy">XY</option><option value="yz">YZ</option></select>
+              </div>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-label">Trajectory</div>
+              <div class="rp-row"><label class="rp-lbl">Show</label><div class="rp-tog" id="tog-traj"></div></div>
+              <div class="rp-row"><label class="rp-lbl">Length</label>
+                <div class="rp-slider-wrap"><input type="range" id="traj-len" min="10" max="2000" step="10" value="300" class="rp-range"><span class="rp-val" id="traj-len-val">300</span></div>
+              </div>
+              <button class="rp-btn" id="btn-clear-traj">🗑 Clear Trajectory</button>
+            </div>
+          </div>
+
+          <!-- ── CAMERA ── -->
+          <div class="rp-pane" data-pane="camera">
+            <div class="rp-pane-title">Camera</div>
+            <div class="rp-section">
+              <div class="rp-row"><label class="rp-lbl">FOV</label>
+                <div class="rp-slider-wrap"><input type="range" id="cam-fov" min="10" max="120" step="1" value="45" class="rp-range"><span class="rp-val" id="cam-fov-val">45</span></div>
+              </div>
+              <div class="rp-row"><label class="rp-lbl">Auto Rotate</label><div class="rp-tog" id="tog-autorot"></div></div>
+              <div class="rp-row"><label class="rp-lbl">Rot Speed</label>
+                <div class="rp-slider-wrap"><input type="range" id="rot-spd" min="-10" max="10" step="0.5" value="2" class="rp-range"><span class="rp-val" id="rot-spd-val">2.0</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── SIMULATION ── -->
+          <div class="rp-pane" data-pane="sim">
+            <div class="rp-pane-title">Simulation</div>
+            <div class="rp-section">
+              <div class="rp-row"><label class="rp-lbl">Running</label><div class="rp-tog on" id="tog-sim-run"></div></div>
+              <div class="rp-row"><label class="rp-lbl">Time Scale</label>
+                <div class="rp-slider-wrap"><input type="range" id="sim-scale" min="0.1" max="10" step="0.1" value="1" class="rp-range"><span class="rp-val" id="sim-scale-val">1.0</span></div>
+              </div>
+              <div class="rp-row"><label class="rp-lbl">Sim Time</label><span class="rp-readout" id="sim-time-display">0.00 s</span></div>
+              <button class="rp-btn" id="btn-sim-reset">🔄 Reset Simulation</button>
+            </div>
+          </div>
+
+          <!-- ── PERFORMANCE ── -->
+          <div class="rp-pane" data-pane="perf">
+            <div class="rp-pane-title">Performance</div>
+            <div class="rp-section">
+              <div class="rp-perf-grid">
+                <div class="rp-perf-card"><div class="rp-perf-val" id="perf-fps">--</div><div class="rp-perf-lbl">FPS</div></div>
+                <div class="rp-perf-card"><div class="rp-perf-val" id="perf-frame">--</div><div class="rp-perf-lbl">Frame ms</div></div>
+                <div class="rp-perf-card"><div class="rp-perf-val" id="perf-render">--</div><div class="rp-perf-lbl">Render ms</div></div>
+                <div class="rp-perf-card"><div class="rp-perf-val" id="perf-mem">--</div><div class="rp-perf-lbl">Mem MB</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── HELP & ABOUT ── -->
+          <div class="rp-pane" data-pane="help">
+            <div class="rp-pane-title">Help &amp; About</div>
+
+            <div class="rp-section">
+              <div class="about-logo">
+                <svg width="28" height="28" viewBox="0 0 20 20" fill="none">
+                  <circle cx="10" cy="10" r="8" stroke="#70c1ff" stroke-width="1.5"/>
+                  <ellipse cx="10" cy="10" rx="8" ry="3.5" stroke="#70c1ff" stroke-width="1.5"/>
+                  <line x1="10" y1="2" x2="10" y2="18" stroke="#70c1ff" stroke-width="1.5"/>
+                </svg>
+                <div>
+                  <div class="about-title">NASA 3D Model Viewer</div>
+                  <div class="about-version">v1.0 · Three.js r179 · WebGL 2</div>
+                </div>
+              </div>
+              <p class="about-desc">Interactive holographic viewer for NASA's open 3D model library. Browse spacecraft, rovers &amp; telescopes rendered with custom GLSL shaders.</p>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-label">Repository</div>
+              <a class="about-link" href="https://github.com/ArtechFuz3D/NASA-3D-Model-Viewer" target="_blank" rel="noopener">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.38.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.04.13 3 .4 2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.21.7.82.58C20.56 21.8 24 17.3 24 12 24 5.37 18.63 0 12 0z"/></svg>
+                ArtechFuz3D / NASA-3D-Model-Viewer
+              </a>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-label">Creator</div>
+              <a class="about-link" href="https://github.com/ArtechFuz3D" target="_blank" rel="noopener">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.38.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.04.13 3 .4 2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.21.7.82.58C20.56 21.8 24 17.3 24 12 24 5.37 18.63 0 12 0z"/></svg>
+                github.com/ArtechFuz3D
+              </a>
+              <a class="about-link" href="https://portfolio.artechfuz3d.xyz" target="_blank" rel="noopener" style="margin-top:5px">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                Portfolio &amp; Projects
+              </a>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-label">Data Source</div>
+              <a class="about-link" href="https://github.com/nasa/NASA-3D-Resources" target="_blank" rel="noopener">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                NASA 3D Resources on GitHub
+              </a>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-label">Controls</div>
+              <div class="about-controls">
+                <div class="about-ctrl-row"><span class="about-key">LMB drag</span><span>Orbit model</span></div>
+                <div class="about-ctrl-row"><span class="about-key">RMB drag</span><span>Pan</span></div>
+                <div class="about-ctrl-row"><span class="about-key">Scroll</span><span>Zoom</span></div>
+                <div class="about-ctrl-row"><span class="about-key">Ctrl+drag</span><span>Pan (planet mode)</span></div>
+              </div>
+            </div>
+
+            <div class="rp-section">
+              <div class="rp-label">Intellectual Property</div>
+              <div class="about-ip-notice">
+                <svg class="about-ip-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                <p>The following original works are the exclusive intellectual property of <strong>ArtechFuz3D</strong> and are protected under copyright:</p>
+              </div>
+              <ul class="about-ip-list">
+                <li>
+                  <span class="about-ip-dot"></span>
+                  <span><strong>Blue crescent favicon &amp; app icon</strong> — original 3D artwork created in Blender</span>
+                </li>
+                <li>
+                  <span class="about-ip-dot"></span>
+                  <span><strong>Hologram shader</strong> — unique GLSL visual style, scan-line aesthetics and aberration effect</span>
+                </li>
+                <li>
+                  <span class="about-ip-dot"></span>
+                  <span><strong>UI design &amp; layout</strong> — custom interface design, iconography and panel system</span>
+                </li>
+                <li>
+                  <span class="about-ip-dot"></span>
+                  <span><strong>App name &amp; branding</strong> — NASA 3D Model Viewer identity and ArtechFuz3D mark</span>
+                </li>
+              </ul>
+              <p class="about-ip-footer">3D model data courtesy of <a class="about-link-inline" href="https://github.com/nasa/NASA-3D-Resources" target="_blank" rel="noopener">NASA's open 3D Resources</a> under NASA's media usage guidelines. All other content © ArtechFuz3D. Unauthorised reproduction, redistribution or commercial use is prohibited.</p>
+            </div>
+
+            <div class="about-made-with">
+              <!-- Made by <span class="about-heart">♥</span> by ArtechFuz3D<br> -->
+              Made by <span class="about-heart">ArtechFuz3D</span><br>
+              <!-- <span class="about-claude">and Claude's love</span> -->
+            </div>
+
+          </div>
+
+        </div><!-- /rp-body -->
+      </aside>
+
+    </div><!-- /app -->
+
+    <!-- BOTTOM STATUS BAR -->
+    <footer id="statusbar">
+      <div class="sb-left">
+        <span class="sb-dot"></span>
+        <span class="sb-item">NASA 3D Resources</span>
+        <span class="sb-sep"></span>
+        <span class="sb-item" id="sb-model-count">—</span>
       </div>
-    </main>
+      <div class="sb-center" id="sb-status"></div>
+      <div class="sb-right">
+        <span class="sb-item">Three.js r179</span>
+        <span class="sb-sep"></span>
+        <span class="sb-item">WebGL 2</span>
+        <span class="sb-sep"></span>
+        <span class="sb-item sb-credit">Made by <a href="https://github.com/ArtechFuz3D" target="_blank" rel="noopener">ArtechFuz3D</a> 
+          <!-- with <span class="sb-heart">♥</span> &amp; Claude's love</span> -->
+      </div>
+    </footer>
 
-  </div>
+    <!-- ═══ PLANET SCENE PANEL ═══════════════════════════════════
+         Opened by View menu. z-index 500 — above everything.
+         Controls are sent to the planet-iframe via postMessage.
+    ══════════════════════════════════════════════════════════════ -->
+    <div id="planet-panel" aria-hidden="true">
+      <div id="planet-panel-inner">
 
-  <!-- BOTTOM STATUS BAR -->
-  <footer id="statusbar">
-    <div class="sb-left">
-      <span class="sb-dot"></span>
-      <span class="sb-item">NASA 3D Resources</span>
-      <span class="sb-sep"></span>
-      <span class="sb-item" id="sb-model-count">—</span>
+        <div id="planet-panel-header">
+          <span id="planet-panel-title">🌍 Planet Scene</span>
+          <button id="planet-panel-close" aria-label="Close panel">✕</button>
+        </div>
+
+        <div class="pp-section">
+          <div class="pp-label">Planet Type</div>
+          <div class="pp-presets">
+            <button class="pp-preset active" data-planet="0" title="Earth">🌍</button>
+            <button class="pp-preset"         data-planet="1" title="Mars">🔴</button>
+            <button class="pp-preset"         data-planet="2" title="Ice World">🧊</button>
+            <button class="pp-preset"         data-planet="3" title="Lava World">🌋</button>
+            <button class="pp-preset"         data-planet="4" title="Alien">🪐</button>
+          </div>
+        </div>
+
+        <div class="pp-section">
+          <div class="pp-label">Surface</div>
+          <div class="pp-row"><span>🗺️ Surface Detail</span> <div class="pp-tog on" data-flag="surface"></div></div>
+          <div class="pp-row"><span>⛰️ Displacement</span>   <div class="pp-tog on" data-flag="disp"></div></div>
+          <div class="pp-row"><span>🌃 Night Lights</span>   <div class="pp-tog on" data-flag="lights"></div></div>
+        </div>
+
+        <div class="pp-section">
+          <div class="pp-label">Atmosphere</div>
+          <div class="pp-row"><span>☁️ Vol. Clouds</span>    <div class="pp-tog on" data-flag="clouds"></div></div>
+          <div class="pp-row"><span>🌫️ Atmosphere</span>    <div class="pp-tog on" data-flag="atmo"></div></div>
+        </div>
+
+        <div class="pp-section">
+          <div class="pp-label">Extras</div>
+          <div class="pp-row"><span>💍 Rings</span>           <div class="pp-tog"    data-flag="rings"></div></div>
+          <div class="pp-row"><span>🌕 Moon</span>            <div class="pp-tog"    data-flag="moon"></div></div>
+          <div class="pp-row"><span>✨ Stars</span>           <div class="pp-tog on" data-flag="stars"></div></div>
+        </div>
+
+        <div class="pp-hint">LMB · Rotate &nbsp;|&nbsp; RMB · Sun &nbsp;|&nbsp; Scroll · Zoom</div>
+
+      </div>
     </div>
-    <div class="sb-center" id="sb-status"></div>
-    <div class="sb-right">
-      <span class="sb-item">Three.js r179</span>
-      <span class="sb-sep"></span>
-      <span class="sb-item">WebGL 2</span>
-    </div>
-  </footer>
 
-  <script type="module" src="./src/main.js"></script>
-</body>
+     <!-- ═══ INTRO OVERLAY ══════════════════════════════════════════
+         Self-contained boot sequence. Removes itself from DOM when done.
+         Video: drop your airlock.webm into public/
+         To disable: remove the two lines below
+    ══════════════════════════════════════════════════════════════ -->
+    <div id="intro-overlay"></div>
+    <script type="module" src="./src/intro.js"></script>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
 </html>
